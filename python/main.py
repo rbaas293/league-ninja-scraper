@@ -2123,7 +2123,10 @@ def write_ics(output: dict[str, Any], path: str | Path, duration_minutes: int = 
     """Render games to .ics and write it atomically (refuses symlinks)."""
     from ics_export import build_ics
 
-    text, n_events, n_skipped = build_ics(output, duration_minutes=duration_minutes)
+    try:
+        text, n_events, n_skipped = build_ics(output, duration_minutes=duration_minutes)
+    except ValueError as err:
+        raise ConfigError(f"Cannot build .ics: {err}") from err
     target = Path(path)
     write_output_atomic(target, text)
     skipped = f" ({n_skipped} without a date/time skipped)" if n_skipped else ""

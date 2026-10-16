@@ -185,7 +185,13 @@ def build_ics(
     ]
     seen: dict[str, int] = {}
     n_events = n_skipped = 0
-    for game in output.get("games") or []:
+    games = output.get("games") or []
+    if not isinstance(games, list):
+        raise ValueError('games.json: "games" must be a list')
+    for game in games:
+        if not isinstance(game, dict):
+            n_skipped += 1
+            continue
         start = game_start(game, scraped_at)
         if start is None:
             n_skipped += 1

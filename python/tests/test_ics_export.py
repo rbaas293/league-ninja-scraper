@@ -127,3 +127,13 @@ def test_cli_ics_refuses_symlink(tmp_path: Path):
     with pytest.raises(SystemExit):
         main.main(["--ics-from", str(src), "--ics", str(link)])
     assert real.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_malformed_games_handled(tmp_path: Path):
+    import main
+
+    assert build_ics({"games": ["x", {"date": "Sun, Oct 18", "time": "1:00 pm"}]})[1:] == (1, 1)
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"games": {"a": 1}}', encoding="utf-8")
+    with pytest.raises(SystemExit):
+        main.main(["--ics-from", str(bad), "--ics", str(tmp_path / "o.ics")])

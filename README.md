@@ -27,7 +27,10 @@ Set in `config.yaml` (`mode: lean|llm`) or override with `SCRAPE_MODE`.
 **Automatic fallback (opt-in):** set `llmFallback: true` in `config.yaml` (or
 `SCRAPE_LLM_FALLBACK=1`) and, if a lean run fails on a site/API error (outage,
 circuit breaker, standings probe error), the scraper retries once with llm mode.
-Config/team-resolution errors never trigger it. The key and the `[llm]` extra are
+Config/team-resolution errors never trigger it. Note: with `levels` configured,
+llm mode still uses the club API to *discover* divisions, so the fallback helps when
+standings/schedule endpoints fail or change shape, but not during a full API outage;
+single-division `leagueUrl` configs are scraped entirely through the browser. The key and the `[llm]` extra are
 only required if the fallback actually fires.
 
 Multi-division: `levels: ["Beer A", "Beer B"]` plus `siteUrl`. Auto-pick prefers an in-range season with **posted** data for those levels (skips seasons that exist but are not posted yet — no matching divisions / no teams). Output includes `seasonStatus`. Empty team schedules are reported as “schedule not posted yet”. Set `season` to force a name or uid. Single-division `leagueUrl` still works when `levels` is empty.
