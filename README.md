@@ -204,8 +204,7 @@ open("games.ics", "w", newline="").write(build_ics(data)[0])
 
 A ready-made Grok Bot that runs this scraper for you and texts you only when you play.
 
-<!-- TODO: add Grok Bot template share link -->
-**Template link: TBD**
+**Template:** [Volleyball Grok Bot template](https://x.ai/bot/Ij_P-Hc7m6AkvPguvJUj1)
 
 **What it does**
 
