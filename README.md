@@ -1,242 +1,110 @@
 # league-ninja-scraper
 
-> **Renamed** from `stagehand-volleyball`. The old GitHub URL redirects. The old
-> `stagehand-volleyball` CLI command and the `STAGEHAND_VOLLEYBALL_CONFIG` env var still
-> work as aliases. Prefer `league-ninja-scraper` and `LEAGUE_NINJA_CONFIG`; the new
-> variable wins when both are set. If you had a calendar import before the rename, keep
-> re-importing: event IDs are unchanged.
+**Find out when and where your rec-league games are without digging through the league website.**
 
-Python scraper for volleyball schedules on [league.ninja](https://league.ninja) (Flannagan's and similar clubs).
+league-ninja-scraper reads your club's [league.ninja](https://league.ninja) schedule
+(Flannagan's and similar clubs) and gives you your team's games: date, time,
+opponent and court. It saves them as a simple JSON file, and can also export a
+calendar file you can drop into Google Calendar, Apple Calendar or Outlook.
 
-Example config searches captains **J. Pike** / **M. Alvarez** across **Beer A** and **Beer B** for the current season (placeholder names — put your own in your local `config.yaml`).
+It's free to run, takes about 3 seconds, and needs **no API key, no browser and no
+AI**. Just Python.
 
-## Lean by default — no API key, no browser, no Stagehand
+## Who it's for
 
-**Lean mode is the default and needs nothing but Python.** It reads the club's
-public league.ninja JSON API over plain HTTP: **no API key, no LLM calls, no
-Chrome, and the Stagehand package does not even need to be installed.** A full
-week across Beer A + Beer B takes ~3 seconds.
+- Players and captains who want their game times without checking the site every week.
+- Anyone on several teams or levels (e.g. Beer A *and* Beer B) who wants them all in one place.
+- People who'd like their games in their calendar, or sent to them by a bot.
 
-**Stagehand + xAI Grok (`llm` mode) is an optional fallback.** It is only
-imported, and `XAI_API_KEY` is only checked, at the moment llm mode actually
-runs. If you never use it you never need a key. If you do use it without the
-extra installed (or without a key) you get a one-line error telling you exactly
-what to install / set — lean runs are never affected.
+## Quick start
 
-| `mode` | What it does | Needs |
-|---|---|---|
-| **`lean`** (default) | Club public LMS API for seasons, division nav, standings, and schedules. | Python only |
-| **`llm`** (optional) | [Stagehand v4](https://docs.stagehand.dev/v4/first-steps/quickstart) + xAI Grok BYO callback: browser `extract()` on standings and each schedule week. | `pip install ".[llm]"`, Chrome (or Browserbase), `XAI_API_KEY` |
-
-Set in `config.yaml` (`mode: lean|llm`) or override with `SCRAPE_MODE`.
-
-**Automatic fallback (opt-in):** set `llmFallback: true` in `config.yaml` (or
-`SCRAPE_LLM_FALLBACK=1`) and, if a lean run fails on a site/API error (outage,
-circuit breaker, standings probe error), the scraper retries once with llm mode.
-Config/team-resolution errors never trigger it. Note: with `levels` configured,
-llm mode still uses the club API to *discover* divisions, so the fallback helps when
-standings/schedule endpoints fail or change shape, but not during a full API outage;
-single-division `leagueUrl` configs are scraped entirely through the browser. The key and the `[llm]` extra are
-only required if the fallback actually fires.
-
-Multi-division: `levels: ["Beer A", "Beer B"]` plus `siteUrl`. Auto-pick prefers an in-range season with **posted** data for those levels (skips seasons that exist but are not posted yet — no matching divisions / no teams). Output includes `seasonStatus`. Empty team schedules are reported as “schedule not posted yet”. Set `season` to force a name or uid. Single-division `leagueUrl` still works when `levels` is empty.
-
-## Requirements
-
-- **Python 3.11+**
-- Lean (default): nothing else — no key, no Chrome, no Stagehand.
-- llm mode / fallback only: `pip install ".[llm]"` (Stagehand + openai client), **Google Chrome** for a local browser, and `XAI_API_KEY` (or `BROWSERBASE_API_KEY`).
-
-## Layout
-
-| Path | Role |
-|---|---|
-| `config.example.yaml` | Public template at **repo root** (copy → local `config.yaml`) |
-| `config.yaml` | Local only (gitignored) |
-| `python/main.py` | CLI entrypoint |
-| `python/lean_api.py` | Pub-api client (lean mode) |
-| `python/lean_http.py` | Robust lean HTTP (retries, circuit breaker, concurrency) |
-| `python/token_usage.py` | xAI token / cost accumulator |
-| `python/ics_export.py` | RFC 5545 `.ics` calendar export |
-| `python/games.json` | Output (gitignored) |
-| `.env` (root or `python/`) | Secrets (gitignored); root `.env` is the fallback |
-
-The scraper code stays under **`python/`** (not moved to repo root) so existing packaging/CI that targets `python/` (see PR #3) keeps working without path rewrites. Root owns config and docs only.
-
-## Config file location
-
-Env files are **not** auto-loaded from the cwd for installed binaries. Use
-`--env-file PATH`, or rely on `python/.env` / repo-root `.env` in a source
-checkout. Only known keys are imported from those files. Set `httpTrustEnv: true`
-in config.yaml only if you intentionally want the xAI client to honor proxy env
-vars.
-
-
-
-The scraper resolves `config.yaml` in this order:
-
-1. `--config PATH` on the CLI
-2. `$LEAGUE_NINJA_CONFIG` (legacy alias: `$STAGEHAND_VOLLEYBALL_CONFIG`)
-3. `./config.yaml` in the current working directory
-4. Repo-root `config.yaml` (and optional `python/config.yaml`) **only when running from a source checkout**
-
-Installed wheels / shiv binaries do **not** look next to the package in site-packages.
-If nothing is found, the error lists every path tried and reminds you to
-`cp config.example.yaml config.yaml`. `.env` is loaded from the cwd as well
-(shell exports still win). Use `--check-config` to validate a config without scraping.
-
-## Config
-
-`config.yaml` is **local only** (gitignored). Start from the public template:
+You'll need **Python 3.11+**.
 
 ```bash
-cp config.example.yaml config.yaml
-# edit captainName / levels / siteUrl / mode / …
-```
-
-If `config.yaml` is missing, the scraper exits with an error that includes that `cp` hint — it does **not** fall back to the example file.
-
-
-| Field | Required | Purpose |
-|---|---|---|
-| `captainName` | one of captain/team | String or YAML list. Exact after normalizing punctuation/case (`"J Pike"` ≡ `"J. Pike"`; no substrings). |
-| `teamName` | one of captain/team | Exact match; used only when `captainName` is empty. |
-| `mode` | no | `lean` (default) or `llm`. |
-| `levels` | no | Name substrings for multi-div discovery (e.g. `Beer A`, `Beer B`). |
-| `siteUrl` | with levels | Club origin, e.g. `https://example.league.ninja`. |
-| `apiBaseUrl` | no | Override pub API base (inferred for known clubs). |
-| `season` | no | Optional season **name or uid** override. When empty, auto-pick prefers in-range seasons that have **posted** data for `levels` (skips “not posted yet”). |
-| `http` | no | Lean HTTP knobs: timeouts, retries, Retry-After, circuit breaker, `concurrency` (default 4). |
-| `leagueUrl` | single-div | Division URL when `levels` is empty. |
-| `day` / `league` | no | Notes for single-div; multi-div uses API fields. |
-| `model` | no | xAI Grok id (default `grok-4-fast-reasoning`). |
-| `schedulePathSuffix` | no | Default `"/schedule"` (llm mode). |
-| `llmFallback` | no | Default `false`. Retry with llm mode if lean fails on a site/API error. |
-
-## Environment
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `XAI_API_KEY` | llm mode / fallback only | xAI key (`https://api.x.ai/v1`). Never needed for lean. |
-| `BROWSERBASE_API_KEY` | optional | Cloud browser (+ Model Gateway if no xAI key). |
-| `STAGEHAND_MODEL` | optional | Overrides `config.model`. |
-| `SCRAPE_MODE` | optional | Overrides `config.mode`. |
-| `SCRAPE_LLM_FALLBACK` | optional | `1`/`0` overrides `config.llmFallback`. |
-| `SCRAPE_LLM_PREFILTER` | optional | Multi-div llm: default `1` HTTP-prefilters standings; `0` disables. |
-| `HEADLESS` | optional | `false` to show Chrome (llm). |
-
-`.env` load order (first wins): **shell exports → `python/.env` → repo-root `.env`**.
-
-Lean mode does not need `XAI_API_KEY`.
-
-## Run
-
-```bash
-cd python
+# 1. Install
+git clone https://github.com/rbaas293/league-ninja-scraper.git
+cd league-ninja-scraper
 python3 -m venv .venv && source .venv/bin/activate
-pip install .                           # core = lean only (or: pip install -r requirements.txt)
-python main.py                          # lean by default — no key needed
-python main.py --ics games.ics          # …and also write a calendar file
+pip install ./python
 
-# Optional llm mode / fallback:
-pip install ".[llm]"                    # or: pip install -r requirements-llm.txt
-SCRAPE_MODE=llm XAI_API_KEY=… python main.py
+# 2. Make your own config (it stays on your machine; never committed)
+cp config.example.yaml config.yaml
+#    edit config.yaml: your club's siteUrl, your captain or team name, your levels
+
+# 3. Run it
+league-ninja-scraper --config config.yaml
+#    prints your games and writes games.json
+
+# 4. Put your games on your calendar
+league-ninja-scraper --config config.yaml --ics games.ics
+#    then import games.ics into Google / Apple / Outlook
 ```
 
-Stdout is JSON; also writes `python/games.json`. Null keys are omitted; `scrapedAt` is UTC with millisecond precision (`YYYY-MM-DDTHH:MM:SS.mmmZ`). Each run logs LLM usage (calls, tokens, estimated USD from published xAI rates).
+A minimal `config.yaml`:
 
-## Calendar export (.ics)
-
-Write an [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545) iCalendar file that
-imports into Google Calendar, Apple Calendar, and Outlook:
-
-```bash
-league-ninja-scraper --ics games.ics                       # scrape + games.json + games.ics
-league-ninja-scraper --ics-from games.json --ics games.ics # convert only (no network)
-league-ninja-scraper --ics games.ics --ics-duration 90     # event length (default 60 min)
+```yaml
+siteUrl: "https://example.league.ninja"
+captainName: ["J. Pike"]        # as shown on the standings page, or use teamName
+levels: ["Beer A", "Beer B"]
 ```
 
-Each game becomes one event:
+Re-import `games.ics` any time. Rescheduled games update in place instead of
+showing up twice. See [docs/CALENDAR.md](docs/CALENDAR.md) for step-by-step import
+instructions.
 
-- **SUMMARY** `Your Team vs Opponent`, **LOCATION** the court (e.g. `Outdoors - Court H`)
-- **DTSTART/DTEND** in `America/New_York` (embedded `VTIMEZONE`, correct across DST)
-- **DESCRIPTION** league, division, week, status/result, schedule link
-- **UID** stable across re-scrapes (from division + week + teams, not the time),
-  so re-importing a newer file **updates** a rescheduled game instead of duplicating it
-- Cancelled games are kept with `STATUS:CANCELLED`; games without a posted time (TBD) are skipped
+## Volleyball Grok Bot
 
-Import: **Google** → Settings → Import & export → Import (pick a calendar);
-**Apple** → File → Import (or double-click the file); **Outlook** → Add calendar →
-Upload from file. For an auto-refreshing calendar, host the `.ics` somewhere private
-and subscribe to its URL (Google: “From URL”; Apple: File → New Calendar Subscription),
-re-running the scraper on a schedule (cron / CI).
+Don't want to run it yourself? Use the ready-made
+**[Volleyball Grok Bot template](https://x.ai/bot/Ij_P-Hc7m6AkvPguvJUj1)**.
 
-### Using it from an AI agent / workflow
-
-Both outputs are designed for agents:
-
-- **`games.json`** — structured, one object per game: `team`, `opponent`, `date`,
-  `time` (display, Eastern), `startsAt` (UTC ISO-8601, lean mode), `location`,
-  `status`, `result`, `week`, `leagueName`, `divisionName`, `url`. An agent with a
-  calendar tool (Google Calendar API, MCP calendar server, etc.) can loop over
-  `games`, skip `status == "cancelled"`, and create/update an event per game with
-  `summary = f"{team} vs {opponent}"`, `location`, and `start = startsAt`. Reuse the
-  `.ics` UID (or `ics_export.game_uid(game)`) as the event's external id so repeat
-  runs update rather than duplicate.
-- **`games.ics`** — for agents/tools that can only import files, hand them the
-  `.ics` directly; it is plain text and safe to attach to an email or upload.
-
-Example agent prompt: *“Run `league-ninja-scraper --ics games.ics`, then add every
-non-cancelled game in `games.json` to my calendar (title “team vs opponent”, location
-= court, 1 hour), updating events that already exist.”*
-
-```python
-import json
-from ics_export import build_ics, game_start, game_uid
-
-data = json.load(open("games.json"))
-for g in data["games"]:
-    print(game_uid(g), game_start(g, None), g["team"], "vs", g["opponent"], g["location"])
-open("games.ics", "w", newline="").write(build_ics(data)[0])
-```
-
-## Grok Bot: Volleyball template
-
-A ready-made Grok Bot that runs this scraper for you and texts you only when you play.
-
-**Template:** [Volleyball Grok Bot template](https://x.ai/bot/Ij_P-Hc7m6AkvPguvJUj1)
-
-**What it does**
-
-- **Every morning** (default 8:00 AM in your time zone) it runs
-  `league-ninja-scraper --config config.yaml` in **lean mode**. That means no API key,
-  no browser and no LLM tokens, and a run takes a few seconds.
-- **On game days** it messages you once per game with **team, opponent, time and
-  court**, for example:
+- **Every morning** (8:00 AM in your time zone by default) it checks the schedule.
+- **On game days** it messages you with team, opponent, time and court, for example:
   > 🏐 Tonight: **Net Gains vs Dig Deep**, 7:15 PM ET, Outdoors - Court H
-- **On days without a game it stays quiet.** It only messages you if the scraper
-  fails, for example when the season isn't posted yet or the site is down.
+- **Other days it stays quiet.** It only speaks up if something's wrong, like the
+  season not being posted yet or the site being down.
+- **Setup is a chat.** The first time you open it, it asks for your club, teams and
+  time zone. It saves your `config.yaml` on the bot's own machine (never committed)
+  and runs a test check so you can confirm it found you. Change anything later by
+  just telling it, e.g. *"add my Tuesday team"* or *"check at 7 instead"*. It can also
+  produce a calendar file on request.
 
-**First chat (setup)**
+## FAQ & troubleshooting
 
-The first time you open the bot, it walks you through:
+**Do I need an API key or an AI account?**
+No. The default mode reads the club's public schedule data directly. An optional
+AI/browser fallback exists (see [docs/LLM_MODE.md](docs/LLM_MODE.md)), and it only
+asks for a key if you turn it on and it actually runs.
 
-1. **Teams.** Your club's league.ninja URL, your team name(s) and/or the captain
-   name shown on the standings, and the levels you play (e.g. `Beer A`, `Beer B`).
-2. **Config.** It writes a local `config.yaml` from `config.example.yaml` on the
-   bot's own machine and runs `--check-config` plus one test scrape so you can
-   confirm it found your teams. `config.yaml` stays local and is **never
-   committed** (it's gitignored).
-3. **Time zone.** Your time zone and the time you want the morning check. Game
-   times are shown in your local time.
+**"Could not find config.yaml"**
+Run `cp config.example.yaml config.yaml`, or point at your file with
+`--config PATH` or `LEAGUE_NINJA_CONFIG=PATH`. Check it with
+`league-ninja-scraper --config config.yaml --check-config`.
 
-You can change any of this later just by telling the bot (e.g. *"add my Tuesday
-team"* or *"check at 7 instead"*). Want calendar entries too? Ask it to run with
-`--ics games.ics` and import the file (see [Calendar export](#calendar-export-ics)).
+**It can't find my team.**
+`captainName` must match the standings page exactly, apart from punctuation and case
+(`J Pike` = `J. Pike`, but `Pike` alone won't match). Or use the exact `teamName`.
+Make sure `levels` matches your division names (e.g. `Beer A`).
 
-## Team resolution
+**It says the schedule isn't posted yet.**
+The new season probably hasn't been published. The scraper skips seasons with no
+posted data. Try again later, or force a season with `season:` in your config.
 
-Prefer `captainName` (exact after normalizing punctuation/case); else exact `teamName`. Multi-div: a miss in one division is OK — failure only if nothing matches across all scanned divisions. Resolve errors name the season scanned and hint at the `season` config override.
+**The game times look off.**
+Times are shown in US Eastern (`America/New_York`), the league's local time. The
+calendar file carries the time zone, so your calendar app converts it to yours.
+
+**I used the old name `stagehand-volleyball`.**
+The project was renamed. The old command and the `STAGEHAND_VOLLEYBALL_CONFIG` variable
+still work, the old GitHub URL redirects, and calendar event IDs are unchanged. Use the
+new name going forward; `LEAGUE_NINJA_CONFIG` wins if both variables are set.
+Reinstall the package under the new name.
+
+## Docs
+
+- [Configuration](docs/CONFIGURATION.md): every config key, environment variables, config lookup order, `.env` files
+- [Calendar export](docs/CALENDAR.md): `.ics` options, importing, and using it from an AI agent or workflow
+- [LLM mode](docs/LLM_MODE.md): the optional Stagehand + Grok fallback, API keys, token usage comparison
+- [Development](docs/DEVELOPMENT.md): repo layout, tests, CI, wheels and shiv binaries, HTTP robustness internals
 
 ## License
 
