@@ -148,7 +148,7 @@ def test_missing_cli_config_does_not_fall_through_to_cwd(
 def test_missing_env_config_does_not_fall_through_to_cwd(
     main_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MJ1: STAGEHAND_VOLLEYBALL_CONFIG missing file must not silently use cwd."""
+    """MJ1: LEAGUE_NINJA_CONFIG missing file must not silently use cwd."""
     _write_min_config(tmp_path / "config.yaml", "From Cwd")
     missing = tmp_path / "env-missing.yaml"
     monkeypatch.setenv(main_mod.CONFIG_ENV_VAR, str(missing))
@@ -246,3 +246,20 @@ def test_make_grok_generate_uses_trust_env_false_by_default(main_mod, monkeypatc
     )
     main_mod.make_grok_generate("key", "grok-test")
     assert captured.get("trust_env") is False
+
+
+def test_legacy_config_env_alias(main_mod, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    legacy = _write_min_config(tmp_path / "legacy.yaml", "From Legacy")
+    monkeypatch.delenv(main_mod.CONFIG_ENV_VAR, raising=False)
+    monkeypatch.setenv("STAGEHAND_VOLLEYBALL_CONFIG", str(legacy))
+    monkeypatch.chdir(tmp_path)
+    assert main_mod.resolve_config_path(None).resolve() == legacy.resolve()
+
+    new = _write_min_config(tmp_path / "new.yaml", "From New")
+    monkeypatch.setenv("LEAGUE_NINJA_CONFIG", str(new))
+    assert main_mod.resolve_config_path(None).resolve() == new.resolve()
+
+    monkeypatch.delenv("LEAGUE_NINJA_CONFIG")
+    monkeypatch.setenv("STAGEHAND_VOLLEYBALL_CONFIG", str(tmp_path / "missing.yaml"))
+    with pytest.raises(main_mod.ConfigError, match="STAGEHAND_VOLLEYBALL_CONFIG"):
+        main_mod.resolve_config_path(None)

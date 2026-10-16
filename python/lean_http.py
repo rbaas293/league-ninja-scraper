@@ -48,7 +48,7 @@ class HttpSettings:
     run_deadline_s: float = 120.0
     concurrency: int = 4
     user_agent: str = (
-        "stagehand-volleyball/lean (+https://github.com/rbaas293/stagehand-volleyball)"
+        "league-ninja-scraper/lean (+https://github.com/rbaas293/league-ninja-scraper)"
     )
 
     @classmethod

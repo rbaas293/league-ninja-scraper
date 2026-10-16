@@ -95,7 +95,10 @@ _RUNNING_FROM_SOURCE = (ROOT / "pyproject.toml").is_file() or (
 ).is_file()
 
 # Env var override for config path (after --config, before cwd).
-CONFIG_ENV_VAR = "STAGEHAND_VOLLEYBALL_CONFIG"
+CONFIG_ENV_VAR = "LEAGUE_NINJA_CONFIG"
+# Backwards-compatible alias from before the repo rename; used only when
+# LEAGUE_NINJA_CONFIG is unset.
+LEGACY_CONFIG_ENV_VAR = "STAGEHAND_VOLLEYBALL_CONFIG"
 
 # Repo-root config when running from a source checkout (python/../config.yaml).
 PARENT_CONFIG = ROOT.parent / "config.yaml"
@@ -130,7 +133,7 @@ def resolve_config_path(cli_path: str | Path | None = None) -> Path:
 
     Precedence:
       1. --config PATH (CLI) — must exist; missing path is a hard error
-      2. $STAGEHAND_VOLLEYBALL_CONFIG — must exist; missing path is a hard error
+      2. $LEAGUE_NINJA_CONFIG — must exist; missing path is a hard error
       3. ./config.yaml in the process cwd
       4. Repo-root ../config.yaml / python/config.yaml — only when running from
          a source checkout (pyproject.toml or requirements.txt beside this file)
@@ -148,12 +151,16 @@ def resolve_config_path(cli_path: str | Path | None = None) -> Path:
         return path
 
     # Explicit env path: same hard-fail rule.
+    env_name = CONFIG_ENV_VAR
     env_path = (os.environ.get(CONFIG_ENV_VAR) or "").strip()
+    if not env_path:
+        env_name = LEGACY_CONFIG_ENV_VAR
+        env_path = (os.environ.get(LEGACY_CONFIG_ENV_VAR) or "").strip()
     if env_path:
         path = Path(env_path).expanduser()
         if not path.is_file():
             raise ConfigError(
-                f"Config file from ${CONFIG_ENV_VAR} not found: {path}"
+                f"Config file from ${env_name} not found: {path}"
             )
         return path
 
@@ -196,7 +203,7 @@ class LlmDependencyError(RuntimeError):
 
 LLM_INSTALL_HINT = (
     'llm mode needs the optional Stagehand extra. Install it with: '
-    'pip install "stagehand-volleyball[llm]" (or, from python/: '
+    'pip install "league-ninja-scraper[llm]" (or, from python/: '
     'pip install -e ".[llm]" / pip install -r requirements-llm.txt). '
     "Lean mode (the default) needs none of this."
 )
@@ -290,7 +297,7 @@ class HttpConfig(BaseModel):
     run_deadline_s: float = Field(default=120.0, gt=0, alias="runDeadlineS")
     concurrency: int = Field(default=4, ge=1, le=32)
     user_agent: str = Field(
-        default="stagehand-volleyball/lean (+https://github.com/rbaas293/stagehand-volleyball)",
+        default="league-ninja-scraper/lean (+https://github.com/rbaas293/league-ninja-scraper)",
         alias="userAgent",
     )
 
@@ -450,6 +457,7 @@ ALLOWED_ENV_KEYS = frozenset(
         "SCRAPE_LLM_PREFILTER",
         "HEADLESS",
         CONFIG_ENV_VAR,
+        LEGACY_CONFIG_ENV_VAR,
     }
 )
 ALLOWED_ENV_PREFIXES = ("BROWSERBASE_",)
@@ -774,7 +782,7 @@ def try_resolve_teams_from_standings(
 # ---------------------------------------------------------------------------
 def log(msg: str) -> None:
     """Print progress to stderr so stdout stays clean JSON."""
-    print(f"[stagehand-volleyball] {msg}", file=sys.stderr)
+    print(f"[league-ninja-scraper] {msg}", file=sys.stderr)
 
 
 DEFAULT_GROK_MODEL = "grok-4-fast-reasoning"
@@ -2057,11 +2065,11 @@ def write_output_atomic(target: Path, text: str) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> Any:
-    """CLI flags shared by `python main.py` and the stagehand-volleyball console script."""
+    """CLI flags shared by `python main.py` and the league-ninja-scraper console script."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="stagehand-volleyball",
+        prog="league-ninja-scraper",
         description=(
             "Scrape league.ninja volleyball schedules (lean HTTP or Stagehand LLM). "
             "Config resolution: --config, $"

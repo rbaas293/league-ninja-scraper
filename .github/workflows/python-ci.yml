@@ -204,7 +204,7 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: python-wheels
+          name: league-ninja-scraper-wheels
           path: |
             python/dist/*.whl
             python/dist/*.tar.gz
@@ -215,15 +215,16 @@ jobs:
           set -euo pipefail
           python -m venv /tmp/wheel-smoke
           /tmp/wheel-smoke/bin/pip install -q dist/*.whl
-          /tmp/wheel-smoke/bin/stagehand-volleyball --help
+          /tmp/wheel-smoke/bin/league-ninja-scraper --help
+          /tmp/wheel-smoke/bin/stagehand-volleyball --help   # legacy CLI alias
           set +e
-          (cd /tmp && /tmp/wheel-smoke/bin/stagehand-volleyball) > /tmp/wheel-missing.out 2>&1
+          (cd /tmp && /tmp/wheel-smoke/bin/league-ninja-scraper) > /tmp/wheel-missing.out 2>&1
           ec=$?
           set -e
           test "$ec" -ne 0
           grep -q "Could not find config.yaml" /tmp/wheel-missing.out
           grep -q "cp config.example.yaml config.yaml" /tmp/wheel-missing.out
-          /tmp/wheel-smoke/bin/stagehand-volleyball \
+          /tmp/wheel-smoke/bin/league-ninja-scraper \
             --config "${{ github.workspace }}/config.example.yaml" \
             --check-config | tee /tmp/wheel-check.out
           grep -q "mode:" /tmp/wheel-check.out
@@ -232,7 +233,7 @@ jobs:
             echo "stagehand must be an optional [llm] extra"; exit 1
           fi
           printf '%s' '{"scrapedAt":"2026-10-16T14:00:00Z","games":[{"date":"Sun, Oct 18","time":"6:00 pm","team":"Net Gains","opponent":"Dig Deep","location":"Outdoors - Court E","status":"scheduled"}]}' > /tmp/g.json
-          env -u XAI_API_KEY /tmp/wheel-smoke/bin/stagehand-volleyball --ics-from /tmp/g.json --ics /tmp/g.ics
+          env -u XAI_API_KEY /tmp/wheel-smoke/bin/league-ninja-scraper --ics-from /tmp/g.json --ics /tmp/g.ics
           grep -q "SUMMARY:Net Gains vs Dig Deep" /tmp/g.ics
 
   shiv:
@@ -265,23 +266,23 @@ jobs:
         run: |
           mkdir -p dist/shiv
           # Console scripts declared in pyproject.toml [project.scripts].
-          # Today: stagehand-volleyball -> main:main. Add a shiv line per script.
+          # Today: league-ninja-scraper -> main:main. Add a shiv line per script.
           shiv \
-            -c stagehand-volleyball \
-            -o dist/shiv/stagehand-volleyball.pyz \
+            -c league-ninja-scraper \
+            -o dist/shiv/league-ninja-scraper.pyz \
             .
 
       - name: Upload shiv artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: python-shiv-binaries
+          name: league-ninja-scraper-shiv
           path: python/dist/shiv/*.pyz
           if-no-files-found: error
 
       - name: Smoke-test shiv binary
         run: |
           set -euo pipefail
-          PYZ=dist/shiv/stagehand-volleyball.pyz
+          PYZ=dist/shiv/league-ninja-scraper.pyz
           test -f "$PYZ"
           python "$PYZ" --help
           set +e

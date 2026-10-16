@@ -28,6 +28,7 @@ python/*.egg-info/
 python/.ruff_cache/
 python/.pytest_cache/
 **/stagehand_volleyball.egg-info/
+**/league_ninja_scraper.egg-info/
 
 # Browser leftovers
 chrome-user-data/

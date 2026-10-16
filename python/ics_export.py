@@ -3,8 +3,8 @@ RFC 5545 iCalendar (.ics) export for games.json.
 
 Pure stdlib, no network, no LLM. Usable as a library or via the CLI:
 
-    stagehand-volleyball --ics games.ics              # scrape, then also write .ics
-    stagehand-volleyball --ics-from games.json --ics games.ics   # convert only
+    league-ninja-scraper --ics games.ics              # scrape, then also write .ics
+    league-ninja-scraper --ics-from games.json --ics games.ics   # convert only
 
 Design notes:
 - Times are emitted as local America/New_York with TZID and an embedded
@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 TZID = "America/New_York"
 _TZ = ZoneInfo(TZID)
-PRODID = "-//stagehand-volleyball//games ics export//EN"
+PRODID = "-//league-ninja-scraper//games ics export//EN"
 DEFAULT_DURATION_MINUTES = 60
 
 # Standard US Eastern definition (DST rules in force since 2007).
@@ -148,6 +148,8 @@ def game_uid(game: dict[str, Any], occurrence: int = 0) -> str:
     if occurrence:
         key += f"|{occurrence}"
     digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:24]
+    # Keep the legacy UID domain so calendars imported before the rename
+    # keep updating the same events instead of duplicating them.
     return f"{digest}@stagehand-volleyball"
 
 

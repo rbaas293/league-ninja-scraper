@@ -30,16 +30,16 @@ Output: `python/games.json` (gitignored).
 ## Packaging (wheels / shiv)
 
 `pyproject.toml` packages `main.py`, `lean_api.py`, `lean_http.py`, `token_usage.py`,
-and `ics_export.py` with console script `stagehand-volleyball` (`main:main`). Core
+and `ics_export.py` with console script `league-ninja-scraper` (`main:main`), plus the legacy alias `stagehand-volleyball`. Core
 dependencies (lean) match `requirements.txt`; the optional `[llm]` extra
 (Stagehand + openai) matches `requirements-llm.txt`. Wheels and shiv binaries are
-core-only by default (`pip install "stagehand-volleyball[llm]"` adds the fallback).
+core-only by default (`pip install "league-ninja-scraper[llm]"` adds the fallback).
 
 ```bash
 cd python
 pip install -e ".[dev,llm]"      # editable + ruff/pytest/build/shiv
 python -m build                  # wheels + sdist under dist/
-shiv -c stagehand-volleyball -o dist/shiv/stagehand-volleyball.pyz .
+shiv -c league-ninja-scraper -o dist/shiv/league-ninja-scraper.pyz .
 pytest -q                        # unit + smoke (no live network)
 ```
 
@@ -48,21 +48,21 @@ merged, then runs checks (3.11/3.12), wheel builds, and shiv binaries.
 
 ## Config file location (wheels / shiv)
 
-`stagehand-volleyball` (and `python main.py`) resolve config in order:
+`league-ninja-scraper` (and `python main.py`) resolve config in order:
 
 1. `--config PATH`
-2. `$STAGEHAND_VOLLEYBALL_CONFIG`
+2. `$LEAGUE_NINJA_CONFIG` (legacy alias: `$STAGEHAND_VOLLEYBALL_CONFIG`)
 3. `./config.yaml` (cwd)
 4. Repo-root / `python/config.yaml` only for source checkouts
 
 ```bash
-stagehand-volleyball --help
-stagehand-volleyball --config /path/to/config.yaml --check-config
-stagehand-volleyball --config config.yaml          # full scrape
+league-ninja-scraper --help
+league-ninja-scraper --config /path/to/config.yaml --check-config
+league-ninja-scraper --config config.yaml          # full scrape
 ```
 
 Packaged installs never read `site-packages/config.yaml`. Put `config.yaml` in
-the directory you run from, or pass `--config` / `$STAGEHAND_VOLLEYBALL_CONFIG`.
+the directory you run from, or pass `--config` / `$LEAGUE_NINJA_CONFIG`.
 Use `--env-file` for allow-listed secrets (cwd `.env` is not auto-loaded).
 Optional config key `httpTrustEnv` (default false) controls whether the xAI
 HTTP client honors proxy environment variables.
