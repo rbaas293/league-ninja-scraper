@@ -8,7 +8,7 @@
 
 # Captain(s) to search for on the standings page (preferred discovery path).
 # Accepts a single string OR a YAML list. Case- and punctuation-insensitive
-# partial match ("Smith" matches "J. Smith"; "R Baas" matches "R. Baas").
+# partial match ("Smith" matches "J. Smith"; "J Pike" matches "J. Pike").
 #
 # Single-string form (still supported):
 #   captainName: "J. Smith"
@@ -79,3 +79,9 @@ http:
 # Leave false unless you intentionally route API traffic through a proxy.
 # httpTrustEnv: false
 
+
+# Optional fallback: when lean mode fails on a site/API error (outage, circuit
+# breaker, standings probe error), retry once with the Stagehand llm path.
+# Off by default. Only when it actually fires does it need the optional extra
+# (pip install ".[llm]") and XAI_API_KEY. Override with SCRAPE_LLM_FALLBACK=1|0.
+llmFallback: false

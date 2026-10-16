@@ -88,7 +88,7 @@ def test_app_config_accepts_camel_case_aliases() -> None:
 
     as_string = main.AppConfig.model_validate(
         {
-            "captainName": "H. Robinson",
+            "captainName": "M. Alvarez",
             "teamName": "",
             "day": "Sunday",
             "league": "Test League",
@@ -96,20 +96,20 @@ def test_app_config_accepts_camel_case_aliases() -> None:
             "schedulePathSuffix": "/schedule",
         }
     )
-    assert as_string.captain_name == ["H. Robinson"]
+    assert as_string.captain_name == ["M. Alvarez"]
     assert as_string.league_url.endswith("/1")
     assert as_string.schedule_path_suffix == "/schedule"
 
     as_list = main.AppConfig.model_validate(
         {
-            "captainName": ["H. Robinson", "R. Baas"],
+            "captainName": ["M. Alvarez", "J. Pike"],
             "teamName": "",
             "day": "Sunday",
             "league": "Test League",
             "leagueUrl": "https://example.com/division/1",
         }
     )
-    assert as_list.captain_name == ["H. Robinson", "R. Baas"]
+    assert as_list.captain_name == ["M. Alvarez", "J. Pike"]
 
 
 def test_config_example_yaml_is_valid_yaml() -> None:

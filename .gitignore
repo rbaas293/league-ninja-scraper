@@ -48,3 +48,6 @@ node_modules/
 # Local scraper config (copy from config.example.yaml). Do not commit personal names/URLs.
 config.yaml
 python/config.yaml
+
+# Calendar exports
+*.ics

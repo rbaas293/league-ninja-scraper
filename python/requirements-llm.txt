@@ -1,0 +1,9 @@
+# Optional llm mode / llmFallback. Keep in sync with pyproject [llm] extra.
+-r requirements.txt
+
+# Stagehand v4 Python SDK (browser act/extract/observe; local Chrome or Browserbase).
+stagehand==4.1.0
+
+# OpenAI-compatible client pointed at https://api.x.ai/v1 (xAI Grok via
+# Stagehand's BYO LLM callback).
+openai>=1.0,<2

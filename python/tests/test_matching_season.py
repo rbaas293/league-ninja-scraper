@@ -23,36 +23,36 @@ from main import (
 
 
 def test_normalize_captain_strips_punct_and_case():
-    assert normalize_captain("R. Baas") == "r baas"
-    assert normalize_captain("R Baas") == "r baas"
-    assert normalize_captain("  H. Robinson ") == "h robinson"
+    assert normalize_captain("J. Pike") == "j pike"
+    assert normalize_captain("J Pike") == "j pike"
+    assert normalize_captain("  M. Alvarez ") == "m alvarez"
 
 
 def test_captain_matches_exact_tokens_only():
-    assert captain_matches("R. Baas", "R Baas")
-    assert captain_matches("H. Robinson", "H Robinson")
-    assert not captain_matches("H. Robinson", "Robinson")  # no substring
-    assert not captain_matches("R. Baas", "Ryan Baas")
-    assert not captain_matches("Ryan Baas", "R. Baas")
-    assert not captain_matches(None, "R. Baas")
-    assert not captain_matches("R. Baas", "")
+    assert captain_matches("J. Pike", "J Pike")
+    assert captain_matches("M. Alvarez", "M Alvarez")
+    assert not captain_matches("M. Alvarez", "Alvarez")  # no substring
+    assert not captain_matches("J. Pike", "Jordan Pike")
+    assert not captain_matches("Jordan Pike", "J. Pike")
+    assert not captain_matches(None, "J. Pike")
+    assert not captain_matches("J. Pike", "")
 
 
 def test_team_name_exact_only_no_substring():
     rows = [
-        StandingsRow(teamName="Win or Lose We Booze", captainName="H. Robinson"),
-        StandingsRow(teamName="Booze Cruise", captainName="Someone"),
+        StandingsRow(teamName="Net Gains", captainName="M. Alvarez"),
+        StandingsRow(teamName="Net Gains Two", captainName="Someone"),
     ]
     matched, res, _ = resolve_teams_from_standings(
-        rows, use_captain=False, captain_names=[], config_team_name="Win or Lose We Booze"
+        rows, use_captain=False, captain_names=[], config_team_name="Net Gains"
     )
     assert res == "teamName"
     assert len(matched) == 1
-    assert matched[0].team_name == "Win or Lose We Booze"
+    assert matched[0].team_name == "Net Gains"
 
     with pytest.raises(ResolveError, match="exact"):
         resolve_teams_from_standings(
-            rows, use_captain=False, captain_names=[], config_team_name="Booze"
+            rows, use_captain=False, captain_names=[], config_team_name="Net"
         )
 
 
@@ -238,7 +238,7 @@ def test_pick_season_skips_empty_standings_as_not_posted():
     def fake_standings(_api: str, uid: str):
         if uid.startswith("new-uid"):
             return []  # no teams yet
-        return [{"teamName": "Him-Roids", "captainName": "R. Baas"}]
+        return [{"teamName": "Block Party", "captainName": "J. Pike"}]
 
     season, _matched, _reason, status = pick_season_for_levels(
         "https://api.example",
@@ -383,7 +383,7 @@ def test_probe_error_then_teams_still_posts():
     def fake_standings(_api: str, uid: str):
         if uid.endswith("-d1"):
             raise LeanApiError("HTTP 500 for standings")
-        return [{"teamName": "Him-Roids", "captainName": "R. Baas"}]
+        return [{"teamName": "Block Party", "captainName": "J. Pike"}]
 
     season, _matched, _reason, status = pick_season_for_levels(
         "https://api.example",
