@@ -1,4 +1,4 @@
-# stagehand-volleyball config template.
+# league-ninja-scraper config template.
 #
 # Copy to a local (gitignored) config.yaml and edit:
 #   cp config.example.yaml config.yaml
@@ -73,7 +73,7 @@ http:
   maxCircuitTrips: 3      # open events before aborting the run
   runDeadlineS: 120.0     # whole-run wall-clock budget
   concurrency: 4         # parallel division fetches (bounded)
-  # userAgent: "stagehand-volleyball/lean"
+  # userAgent: "league-ninja-scraper/lean"
 
 # Optional: allow the xAI HTTP client to honor HTTP(S)_PROXY from the environment.
 # Leave false unless you intentionally route API traffic through a proxy.

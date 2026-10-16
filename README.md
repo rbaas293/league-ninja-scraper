@@ -1,4 +1,10 @@
-# stagehand-volleyball
+# league-ninja-scraper
+
+> **Renamed** from `stagehand-volleyball`. The old GitHub URL redirects. The old
+> `stagehand-volleyball` CLI command and the `STAGEHAND_VOLLEYBALL_CONFIG` env var still
+> work as aliases. Prefer `league-ninja-scraper` and `LEAGUE_NINJA_CONFIG`; the new
+> variable wins when both are set. If you had a calendar import before the rename, keep
+> re-importing: event IDs are unchanged.
 
 Python scraper for volleyball schedules on [league.ninja](https://league.ninja) (Flannagan's and similar clubs).
 
@@ -70,7 +76,7 @@ vars.
 The scraper resolves `config.yaml` in this order:
 
 1. `--config PATH` on the CLI
-2. `$STAGEHAND_VOLLEYBALL_CONFIG`
+2. `$LEAGUE_NINJA_CONFIG` (legacy alias: `$STAGEHAND_VOLLEYBALL_CONFIG`)
 3. `./config.yaml` in the current working directory
 4. Repo-root `config.yaml` (and optional `python/config.yaml`) **only when running from a source checkout**
 
@@ -145,9 +151,9 @@ Write an [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545) iCalendar file that
 imports into Google Calendar, Apple Calendar, and Outlook:
 
 ```bash
-stagehand-volleyball --ics games.ics                       # scrape + games.json + games.ics
-stagehand-volleyball --ics-from games.json --ics games.ics # convert only (no network)
-stagehand-volleyball --ics games.ics --ics-duration 90     # event length (default 60 min)
+league-ninja-scraper --ics games.ics                       # scrape + games.json + games.ics
+league-ninja-scraper --ics-from games.json --ics games.ics # convert only (no network)
+league-ninja-scraper --ics games.ics --ics-duration 90     # event length (default 60 min)
 ```
 
 Each game becomes one event:
@@ -180,7 +186,7 @@ Both outputs are designed for agents:
 - **`games.ics`** — for agents/tools that can only import files, hand them the
   `.ics` directly; it is plain text and safe to attach to an email or upload.
 
-Example agent prompt: *“Run `stagehand-volleyball --ics games.ics`, then add every
+Example agent prompt: *“Run `league-ninja-scraper --ics games.ics`, then add every
 non-cancelled game in `games.json` to my calendar (title “team vs opponent”, location
 = court, 1 hour), updating events that already exist.”*
 

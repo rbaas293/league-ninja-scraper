@@ -136,7 +136,7 @@ main.main(["--config", "config.yaml"])
         tmp_path,
     )
     assert proc.returncode == 1
-    assert 'pip install "stagehand-volleyball[llm]"' in proc.stderr
+    assert 'pip install "league-ninja-scraper[llm]"' in proc.stderr
     assert "dummy-not-a-real-key" not in proc.stderr + proc.stdout
     assert "Traceback" not in proc.stderr
 
