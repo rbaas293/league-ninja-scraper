@@ -9,23 +9,27 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stagehand-volleyball"
 version = "0.1.0"
-description = "Stagehand v4 Python scraper for league.ninja volleyball schedules"
+description = "league.ninja volleyball schedule scraper (lean HTTP by default; optional Stagehand/Grok llm fallback)"
 readme = "README.md"
 # Stagehand + README require 3.11+ (stack tip after #4/#5).
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "Ryan Baas" }]
+authors = [{ name = "stagehand-volleyball contributors" }]
+# Core deps = lean mode only (no Stagehand, no LLM SDK, no API key).
+# Keep in sync with requirements.txt / requirements-llm.txt.
 dependencies = [
-    # Keep in sync with requirements.txt (pip -r still works for non-packaged runs).
-    "stagehand==4.1.0",
     "pydantic>=2.0,<3",
     "PyYAML>=6.0,<7",
     "python-dotenv>=1.0,<2",
-    # OpenAI-compatible client for xAI Grok (Stagehand BYO LLM callback).
-    "openai>=1.0,<2",
 ]
 
 [project.optional-dependencies]
+# Optional llm mode / llmFallback: Stagehand v4 browser + xAI Grok via the
+# OpenAI-compatible client. Install with: pip install ".[llm]"
+llm = [
+    "stagehand==4.1.0",
+    "openai>=1.0,<2",
+]
 # CI / local verification: lint, tests, wheel build, shiv binaries.
 dev = [
     "ruff>=0.6",
@@ -41,7 +45,7 @@ stagehand-volleyball = "main:main"
 
 [tool.setuptools]
 # Flat layout: keep modules importable as `import main` / lean_api / token_usage.
-py-modules = ["main", "lean_api", "lean_http", "token_usage"]
+py-modules = ["main", "lean_api", "lean_http", "token_usage", "ics_export"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

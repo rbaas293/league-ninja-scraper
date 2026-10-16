@@ -28,7 +28,7 @@ Env:
 
 Config resolution:
   - If captainName is set (non-empty), discover team(s) on the standings page whose
-    captain matches (exact after normalizing punctuation/case: "R. Baas" ≡ "R Baas"),
+    captain matches (exact after normalizing punctuation/case: "J. Pike" ≡ "J Pike"),
     then scrape all games for those team name(s).
   - If captainName is empty/absent, use teamName as an explicit team override.
 
@@ -54,10 +54,15 @@ from urllib.parse import urlparse  # Validate leagueUrl is a real http(s) URL
 
 # ---- Third-party ------------------------------------------------------------
 import yaml  # PyYAML: parse config.yaml (safe_load only — plain data, never arbitrary objects)
-from openai import AsyncOpenAI
-import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from stagehand import LLMStructuredGenerateResult, Stagehand, browserbase, local_browser
+# Stagehand / openai are OPTIONAL (pip install ".[llm]"). They are imported lazily
+# by _import_llm_stack() only when llm mode actually runs, so lean mode works
+# with neither package installed and no XAI_API_KEY.
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # type hints only; never imported at runtime
+    from stagehand import Stagehand
 
 # ---- Local helpers (lean HTTP API + LLM token accounting) -------------------
 from lean_api import (
@@ -183,6 +188,34 @@ def resolve_config_path(cli_path: str | Path | None = None) -> Path:
 # ---------------------------------------------------------------------------
 class ConfigError(Exception):
     """Raised when config.yaml is missing, unreadable, not valid YAML, or fails validation."""
+
+
+class LlmDependencyError(RuntimeError):
+    """Raised when llm mode runs but the optional stagehand/openai packages are missing."""
+
+
+LLM_INSTALL_HINT = (
+    'llm mode needs the optional Stagehand extra. Install it with: '
+    'pip install "stagehand-volleyball[llm]" (or, from python/: '
+    'pip install -e ".[llm]" / pip install -r requirements-llm.txt). '
+    "Lean mode (the default) needs none of this."
+)
+
+
+def _import_llm_stack() -> dict[str, Any]:
+    """Lazily import stagehand + openai; raise LlmDependencyError with an install hint."""
+    try:
+        from openai import AsyncOpenAI
+        from stagehand import LLMStructuredGenerateResult, Stagehand, browserbase, local_browser
+    except ImportError as err:
+        raise LlmDependencyError(f"{LLM_INSTALL_HINT} (import failed: {err.name or err})") from err
+    return {
+        "AsyncOpenAI": AsyncOpenAI,
+        "LLMStructuredGenerateResult": LLMStructuredGenerateResult,
+        "Stagehand": Stagehand,
+        "browserbase": browserbase,
+        "local_browser": local_browser,
+    }
 
 
 class MissingKeyError(Exception):
@@ -319,6 +352,9 @@ class AppConfig(BaseModel):
     # When true, the xAI HTTP client honors env proxy settings (HTTP(S)_PROXY).
     # Default false so a poisoned proxy env cannot intercept API traffic.
     http_trust_env: bool = Field(default=False, alias="httpTrustEnv")
+    # Opt-in: if lean mode fails on a site/API error, retry once with the
+    # Stagehand llm path. Needs the [llm] extra + XAI_API_KEY only when it fires.
+    llm_fallback: bool = Field(default=False, alias="llmFallback")
 
     # Allow reading camelCase YAML keys while exposing snake_case attributes in Python.
     model_config = {"populate_by_name": True}
@@ -409,6 +445,7 @@ ALLOWED_ENV_KEYS = frozenset(
         "XAI_API_KEY",
         "BROWSERBASE_API_KEY",
         "STAGEHAND_MODEL",
+        "SCRAPE_LLM_FALLBACK",
         "SCRAPE_MODE",
         "SCRAPE_LLM_PREFILTER",
         "HEADLESS",
@@ -573,7 +610,7 @@ class StandingsRow(BaseModel):
     captain_name: str | None = Field(
         default=None,
         alias="captainName",
-        description="Captain name shown for that team, e.g. 'H. Robinson'",
+        description="Captain name shown for that team, e.g. 'M. Alvarez'",
     )
     record: str | None = Field(
         default=None,
@@ -614,7 +651,7 @@ def games_schema_for(team_names: list[str]) -> type[BaseModel]:
     Build a Games-like pydantic model whose Field description names the matched
     teams (helps the LLM filter schedule cards to our matched teams).
     """
-    # Quote each team so the description reads: "Win or Lose We Booze" or "Other"
+    # Quote each team so the description reads: "Net Gains" or "Other"
     listed = " or ".join(f'"{t}"' for t in team_names)
 
     class GamesForTeams(BaseModel):
@@ -631,7 +668,7 @@ def games_schema_for(team_names: list[str]) -> type[BaseModel]:
 # Team resolution helpers
 # ---------------------------------------------------------------------------
 def normalize_captain(s: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace — so 'R Baas' ≡ 'R. Baas'."""
+    """Lowercase, strip punctuation, collapse whitespace — so 'J Pike' ≡ 'J. Pike'."""
     lowered = s.lower()
     # Drop everything except letters, digits, and spaces.
     cleaned = re.sub(r"[^a-z0-9\s]", "", lowered)
@@ -643,7 +680,7 @@ def captain_matches(row_captain: str | None, wanted: str) -> bool:
     Exact captain match after normalizing punctuation and case.
 
     Tokens must be equal (no substring / partial matches).
-    "R. Baas" ≡ "R Baas"; "Robinson" does NOT match "H. Robinson".
+    "J. Pike" ≡ "J Pike"; "Alvarez" does NOT match "M. Alvarez".
     """
     if not row_captain or not wanted:
         return False
@@ -771,8 +808,12 @@ def make_grok_generate(api_key: str, model_id: str, *, trust_env: bool = False):
     trust_env=False (default) ignores HTTP(S)_PROXY from the environment unless
     the user sets httpTrustEnv: true in config.yaml.
     """
+    llm = _import_llm_stack()
+    LLMStructuredGenerateResult = llm["LLMStructuredGenerateResult"]
+    import httpx  # ships with openai; only needed for the llm path
+
     http_client = httpx.AsyncClient(trust_env=trust_env)
-    client = AsyncOpenAI(api_key=api_key, base_url=XAI_BASE_URL, http_client=http_client)
+    client = llm["AsyncOpenAI"](api_key=api_key, base_url=XAI_BASE_URL, http_client=http_client)
 
     def content_part(block: Any) -> dict[str, Any]:
         # Each block is LLMTextContent or LLMImageContent under `.root`.
@@ -857,15 +898,16 @@ async def launch_browser():
 
     HEADLESS defaults to true; set HEADLESS=false to watch the window.
     """
+    llm = _import_llm_stack()
     bb_key = os.environ.get("BROWSERBASE_API_KEY")
     if bb_key:
         log("Using Browserbase cloud browser")
-        return await browserbase.launch(api_key=bb_key)
+        return await llm["browserbase"].launch(api_key=bb_key)
 
     # HEADLESS=false means show the Chrome UI; anything else (incl. unset) is headless.
     headless = os.environ.get("HEADLESS", "true").lower() != "false"
     log(f"Using local Chrome (headless={headless})")
-    return await local_browser.launch(headless=headless)
+    return await llm["local_browser"].launch(headless=headless)
 
 
 # ---------------------------------------------------------------------------
@@ -1715,7 +1757,9 @@ async def scrape_llm(config: AppConfig) -> dict[str, Any]:
     else:
         log(f'Config: mode=llm team="{config_team_name}" levels={config.levels!r} model={model_id!r}')
 
+    # Key check first (clear MissingKeyError), then the optional-dependency check.
     create_kwargs = model_kwargs(config.model, trust_env=config.http_trust_env)
+    Stagehand = _import_llm_stack()["Stagehand"]
     season_name, divisions, season_status = discover_target_divisions(config)
 
     suffix = config.schedule_path_suffix
@@ -1948,8 +1992,27 @@ async def scrape(
 
     log(f"Config path:   {CONFIG_PATH}")
     if config.mode == "lean":
-        return scrape_lean(config)
+        try:
+            return scrape_lean(config)
+        except (LeanApiError, CircuitTrippedError, StandingsProbeError) as err:
+            if not llm_fallback_enabled(config):
+                raise
+            log(
+                f"Lean mode failed ({type(err).__name__}: {describe_error(err)}); "
+                "llmFallback is on → retrying with Stagehand llm mode"
+            )
+            return await scrape_llm(config.model_copy(update={"mode": "llm"}))
     return await scrape_llm(config)
+
+
+def llm_fallback_enabled(config: AppConfig) -> bool:
+    """SCRAPE_LLM_FALLBACK=1/0 overrides config llmFallback (default off)."""
+    raw = (os.environ.get("SCRAPE_LLM_FALLBACK") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return bool(config.llm_fallback)
 
 
 
@@ -2028,12 +2091,53 @@ def parse_args(argv: list[str] | None = None) -> Any:
             "(no network / browser). Useful for packaging smoke tests."
         ),
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--ics",
+        metavar="PATH",
+        help=(
+            "Also write an RFC 5545 iCalendar file of the games (America/New_York, "
+            "stable UIDs) importable into Google / Apple / Outlook calendars."
+        ),
+    )
+    parser.add_argument(
+        "--ics-from",
+        metavar="GAMES_JSON",
+        help="Convert an existing games.json to --ics PATH without scraping (no network).",
+    )
+    parser.add_argument(
+        "--ics-duration",
+        metavar="MINUTES",
+        type=int,
+        default=60,
+        help="Event length in minutes for the .ics export (default 60).",
+    )
+    args = parser.parse_args(argv)
+    if args.ics_from and not args.ics:
+        parser.error("--ics-from requires --ics PATH")
+    if not 1 <= args.ics_duration <= 24 * 60:
+        parser.error("--ics-duration must be between 1 and 1440 minutes")
+    return args
+
+
+def write_ics(output: dict[str, Any], path: str | Path, duration_minutes: int = 60) -> None:
+    """Render games to .ics and write it atomically (refuses symlinks)."""
+    from ics_export import build_ics
+
+    try:
+        text, n_events, n_skipped = build_ics(output, duration_minutes=duration_minutes)
+    except ValueError as err:
+        raise ConfigError(f"Cannot build .ics: {err}") from err
+    target = Path(path)
+    write_output_atomic(target, text)
+    skipped = f" ({n_skipped} without a date/time skipped)" if n_skipped else ""
+    log(f"Wrote {n_events} calendar event(s) to {target}{skipped}")
 
 
 async def async_main(
     cli_config: str | Path | None = None,
     env_file: str | Path | None = None,
+    ics_path: str | Path | None = None,
+    ics_duration: int = 60,
 ) -> None:
     """Run scrape(), print JSON to stdout, write games.json."""
     global OUTPUT_PATH
@@ -2046,6 +2150,8 @@ async def async_main(
     n_games = len(output.get("games") or [])
     n_teams = len(output.get("matchedTeams") or [])
     log(f"Wrote {n_games} games for {n_teams} team(s) to {OUTPUT_PATH}")
+    if ics_path:
+        write_ics(output, ics_path, ics_duration)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -2060,8 +2166,17 @@ def main(argv: list[str] | None = None) -> None:
             print(f"captainName: {config.captain_name!r}")
             print(f"teamName: {config.team_name!r}")
             return
-        asyncio.run(async_main(args.config, args.env_file))
-    except (ConfigError, MissingKeyError, ResolveError, WeekTabError, CircuitTrippedError, StandingsProbeError, LeanApiError) as err:
+        if args.ics_from:
+            try:
+                data = json.loads(Path(args.ics_from).read_text(encoding="utf-8"))
+            except (OSError, ValueError) as err:
+                raise ConfigError(f"Cannot read --ics-from {args.ics_from}: {err}") from err
+            if not isinstance(data, dict):
+                raise ConfigError(f"--ics-from {args.ics_from}: expected a games.json object")
+            write_ics(data, args.ics, args.ics_duration)
+            return
+        asyncio.run(async_main(args.config, args.env_file, args.ics, args.ics_duration))
+    except (ConfigError, MissingKeyError, LlmDependencyError, ResolveError, WeekTabError, CircuitTrippedError, StandingsProbeError, LeanApiError) as err:
         # Friendly one-liners for config / key / resolve / week-tab failures.
         # describe_error() never returns an empty string.
         print(describe_error(err), file=sys.stderr)

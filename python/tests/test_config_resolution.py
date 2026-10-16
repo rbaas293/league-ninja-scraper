@@ -224,18 +224,25 @@ def test_write_output_atomic_refuses_symlink(main_mod, tmp_path: Path) -> None:
 
 
 def test_make_grok_generate_uses_trust_env_false_by_default(main_mod, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
     captured: dict = {}
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr(main_mod.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(AsyncClient=FakeAsyncClient))
 
     class FakeOpenAI:
         def __init__(self, **kwargs):
             captured["openai_kwargs"] = kwargs
 
-    monkeypatch.setattr(main_mod, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(
+        main_mod,
+        "_import_llm_stack",
+        lambda: {"AsyncOpenAI": FakeOpenAI, "LLMStructuredGenerateResult": object},
+    )
     main_mod.make_grok_generate("key", "grok-test")
     assert captured.get("trust_env") is False

@@ -428,6 +428,17 @@ def _format_match_start(raw: str | None) -> tuple[str, str]:
     return date_str, time_str
 
 
+def _iso_utc(raw: str | None) -> str | None:
+    """Normalize the API matchStart to 'YYYY-MM-DDTHH:MM:SSZ' (UTC), or None."""
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "")).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _week_label(match: dict[str, Any]) -> str:
     inc_name = (match.get("incrementName") or "").strip()
     inc_num = match.get("incrementNumber")
@@ -508,6 +519,8 @@ def games_for_teams(
             {
                 "date": date_str,
                 "time": time_str,
+                # Machine-readable start (UTC ISO-8601) for calendar export / agents.
+                "startsAt": _iso_utc(m.get("matchStart")),
                 "week": _week_label(m),
                 "team": team,
                 "opponent": opponent,
