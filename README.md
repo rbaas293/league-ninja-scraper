@@ -200,6 +200,41 @@ for g in data["games"]:
 open("games.ics", "w", newline="").write(build_ics(data)[0])
 ```
 
+## Grok Bot: Volleyball template
+
+A ready-made Grok Bot that runs this scraper for you and texts you only when you play.
+
+<!-- TODO: add Grok Bot template share link -->
+**Template link: TBD**
+
+**What it does**
+
+- **Every morning** (default 8:00 AM in your time zone) it runs
+  `league-ninja-scraper --config config.yaml` in **lean mode**. That means no API key,
+  no browser and no LLM tokens, and a run takes a few seconds.
+- **On game days** it messages you once per game with **team, opponent, time and
+  court**, for example:
+  > 🏐 Tonight: **Net Gains vs Dig Deep**, 7:15 PM ET, Outdoors - Court H
+- **On days without a game it stays quiet.** It only messages you if the scraper
+  fails, for example when the season isn't posted yet or the site is down.
+
+**First chat (setup)**
+
+The first time you open the bot, it walks you through:
+
+1. **Teams.** Your club's league.ninja URL, your team name(s) and/or the captain
+   name shown on the standings, and the levels you play (e.g. `Beer A`, `Beer B`).
+2. **Config.** It writes a local `config.yaml` from `config.example.yaml` on the
+   bot's own machine and runs `--check-config` plus one test scrape so you can
+   confirm it found your teams. `config.yaml` stays local and is **never
+   committed** (it's gitignored).
+3. **Time zone.** Your time zone and the time you want the morning check. Game
+   times are shown in your local time.
+
+You can change any of this later just by telling the bot (e.g. *"add my Tuesday
+team"* or *"check at 7 instead"*). Want calendar entries too? Ask it to run with
+`--ics games.ics` and import the file (see [Calendar export](#calendar-export-ics)).
+
 ## Team resolution
 
 Prefer `captainName` (exact after normalizing punctuation/case); else exact `teamName`. Multi-div: a miss in one division is OK — failure only if nothing matches across all scanned divisions. Resolve errors name the season scanned and hint at the `season` config override.
